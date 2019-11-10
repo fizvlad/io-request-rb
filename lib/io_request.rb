@@ -1,6 +1,6 @@
-require "io_request/version"
+require_relative "io_request/version"
+require_relative "io_request/utility"
+require_relative "io_request/logging"
 
-module IoRequest
-  class Error < StandardError; end
-  # Your code goes here...
-end
+# Main module.
+module IORequest; end
