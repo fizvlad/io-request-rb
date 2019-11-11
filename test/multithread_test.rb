@@ -28,11 +28,9 @@ class TestingClass
   def join
     join_threads
   end
-
 end
 
 class MultiThreadTest < Minitest::Test
-
   WAIT_TIME = 2
 
   def test_in_thread 
@@ -77,5 +75,4 @@ class MultiThreadTest < Minitest::Test
     assert_equal(n, t.num)
     assert_empty(t.threads)
   end
-
 end

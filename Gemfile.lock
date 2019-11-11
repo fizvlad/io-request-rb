@@ -4,6 +4,7 @@ PATH
     io_request (0.1.0)
       json (~> 2.0)
       logger (~> 1.4)
+      timeout-extensions (~> 0.1.1)
 
 GEM
   remote: https://rubygems.org/
@@ -12,6 +13,7 @@ GEM
     logger (1.4.1)
     minitest (5.13.0)
     rake (10.5.0)
+    timeout-extensions (0.1.1)
 
 PLATFORMS
   x64-mingw32

@@ -32,5 +32,6 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "minitest", "~> 5.0"
 
   spec.add_runtime_dependency "logger", "~>1.4"
+  spec.add_runtime_dependency "timeout-extensions", "~>0.1.1"
   spec.add_runtime_dependency "json", "~>2.0"
 end

@@ -84,5 +84,16 @@ class Hash
     end
     self
   end
+
+  # Whether provided hash is included into this one.
+  #
+  # @param other [Hash]
+  #
+  # @return [Boolean]
+  def contains?(other)
+    other.keys.all? do |key|
+      other[key] == self[key]
+    end
+  end
 end
 
