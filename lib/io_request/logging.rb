@@ -3,7 +3,7 @@ require "logger"
 module IORequest
   # @!group Logger
 
-  # Defualt logger.
+  # Default logger.
   @@logger = Logger.new($LOG_FILE || STDOUT,
     formatter: Proc.new do |severity, datetime, progname, msg|
       "[#{datetime}] #{severity} - #{progname}:\t #{msg}\n"
