@@ -39,7 +39,7 @@ module IORequest
     # @yieldparam request [Response] response for request.
     # 
     # @return [Request]
-    def request(data, sync: false, timeout: nil, &block)
+    def request(data: {}, sync: false, timeout: nil, &block)
       req = Request.new(data)
       @out_requests[req] = block
       send(req.to_hash)
@@ -137,13 +137,19 @@ module IORequest
     #
     # @param timeout [Integer, Float, nil] timeout size or +nil+ if no timeout required.
     #
-    # @return [Hash, nil] hash or +nil+ if timed out.
+    # @return [Hash, nil] hash or +nil+ if timed out or IO was closed.
     def receive(timeout)
       str = Timeout::timeout(timeout) do
         receive_raw
       end
+      return nil if str.nil?
       string_to_data(decode(str))
     rescue Timeout::Error
+      nil
+    rescue IOError
+      nil
+    rescue Exception => e
+      IORequest.warn "Exception of #{e.class} encountered while trying to receive message. Suggesting IO was closed. Full trace: #{e.full_message}", prog_name
       nil
     end
 
@@ -153,7 +159,7 @@ module IORequest
     end
     # Receive string.
     def receive_raw
-      @io_r.gets.chomp
+      @io_r.gets&.chomp
     end
 
     # Encode string
