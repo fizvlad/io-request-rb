@@ -20,7 +20,9 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+Documentation is available at https://www.rubydoc.info/gems/io_request
+
+Some examples could be find in *examples* folder.
 
 ## Development
 

@@ -8,9 +8,6 @@ module IORequest
     include Utility::WithProgName
     include Utility::MultiThread
 
-    # IO-like object provided at initialization.
-    attr_reader :io
-
     # Initialize new client over IO.
     #
     # @option options [:gets] read IO to read from.
@@ -31,8 +28,7 @@ module IORequest
     #
     # Optional block can be provided. It will be called when response received.
     #
-    # @param data [Hash] data to send with request.
-    #
+    # @option options [Hash] data data to send.
     # @option options [Boolean] sync whether to join request after sending.
     # @option options [Integer, Float] timeout timeout for {Request#join}.
     #
@@ -42,6 +38,7 @@ module IORequest
     def request(data: {}, sync: false, timeout: nil, &block)
       req = Request.new(data)
       @out_requests[req] = block
+      IORequest.debug("Sending request ##{req.id}", prog_name)
       send(req.to_hash)
       req.join(timeout) if sync
       req
@@ -85,12 +82,18 @@ module IORequest
       in_thread do
         responder = find_responder(req)
         data = nil
-        begin
-          data = responder.call(req) if responder
+        data = begin
+          if responder
+            responder.call(req)
+          else
+            IORequest.warn "Responder not found!"
+            nil
+          end
         rescue Exception => e
-          IORequest.warn("Provided block raised exception:\n#{e.full_message}", prog_name)
+          IORequest.warn "Provided block raised exception:\n#{e.full_message}", prog_name
+          nil
         end
-        data = {} unless data.is_a?(Hash)
+        data ||= {}
         res = Response.new(data, req)
         send(res.to_hash)
       end
@@ -121,15 +124,22 @@ module IORequest
 
     # find responder for provided request.
     def find_responder(req)
+      result = nil
       @responders.each do |subdata, block|
-        break block if req.data.contains? subdata
+        if req.data.contains? subdata
+          result = block
+          break
+        end
       end
+      
+      result
     end
 
     # Send data.
     # 
     # @param [Hash]
     def send(data)
+      IORequest.debug("Sending hash: #{data.inspect}", prog_name)
       send_raw(encode(data_to_string data))
     end
 
