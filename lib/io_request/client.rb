@@ -33,7 +33,7 @@ module IORequest
     # @option options [Integer, Float] timeout timeout for {Request#join}.
     #
     # @yieldparam request [Response] response for request.
-    # 
+    #
     # @return [Request]
     def request(data: {}, sync: false, timeout: nil, &block)
       req = Request.new(data)
@@ -79,12 +79,12 @@ module IORequest
     # Handle incoming request.
     def handle_in_request(req)
       IORequest.debug("Handling request ##{req.id}", prog_name)
-      in_thread do
+      in_thread(name: "request_handler") do
         responder = find_responder(req)
         data = nil
         data = begin
           if responder
-            responder.call(req)
+            responder.call(req, self)
           else
             IORequest.warn "Responder not found!"
             nil
@@ -112,7 +112,7 @@ module IORequest
       # If block is not provided it's totally ok
       block = @out_requests.delete(req)
       if block
-        in_thread do
+        in_thread(name: "response_handle") do
           begin
             block.call(res)
           rescue Exception => e
@@ -131,12 +131,12 @@ module IORequest
           break
         end
       end
-      
+
       result
     end
 
     # Send data.
-    # 
+    #
     # @param [Hash]
     def send(data)
       IORequest.debug("Sending hash: #{data.inspect}", prog_name)

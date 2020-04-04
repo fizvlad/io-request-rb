@@ -24,8 +24,12 @@ module IORequest
 
       # Runs block with provided arguments forwarded as arguments in separate thread.
       #
+      # All the inline args will be passed to block.
+      #
+      # @param thread_name [String] thread name.
+      #
       # @return [Thread]
-      def in_thread(*args, &block)
+      def in_thread(*args, name: nil, &block)
         @_MultiThread_threads ||= []
         @_MultiThread_mutex ||= Mutex.new
         # Synchronizing addition/deletion of new threads. That's important
@@ -40,14 +44,15 @@ module IORequest
             end
           end
           @_MultiThread_threads << new_thread
+          new_thread.name = name if name
           new_thread
-        end        
+        end
       end
 
       # For each running thread.
       def each_thread(&block)
         @_MultiThread_threads ||= []
-        
+
         @_MultiThread_threads.each(&block)
       end
 
