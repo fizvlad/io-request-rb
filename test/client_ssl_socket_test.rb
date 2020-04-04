@@ -24,7 +24,7 @@ $CERT.add_extension(ef.create_extension("subjectKeyIdentifier","hash",false))
 $CERT.add_extension(ef.create_extension("authorityKeyIdentifier","keyid:always",false))
 $CERT.sign($KEY, OpenSSL::Digest::SHA256.new)
 
-class ClientSocketTest < Minitest::Test
+class ClientSslSocketTest < Minitest::Test
   def setup
     $PORT += 1
     puts "Starting test at port #{$PORT}"
@@ -42,7 +42,7 @@ class ClientSocketTest < Minitest::Test
     connect_thread = Thread.new { @c.connect }
     @sc.accept
     connect_thread.join
-    
+
     @client_1 = IORequest::Client.new read: @c, write: @c
     @client_2 = IORequest::Client.new read: @sc, write: @sc
   end
@@ -72,7 +72,7 @@ class ClientSocketTest < Minitest::Test
       sleep sleep_time
       { num: request.data[:num] }
     end
-    
+
 
     requests = Array.new(total) do |i|
       @client_1.request data: { sleep_time: total - i, num: i } do |response|
