@@ -84,7 +84,7 @@ module IORequest
         data = nil
         data = begin
           if responder
-            responder.call(req)
+            responder.call(req, self)
           else
             IORequest.warn "Responder not found!"
             nil
