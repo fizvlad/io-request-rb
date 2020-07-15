@@ -12,7 +12,7 @@ Gem::Specification.new do |spec|
   spec.homepage      = "https://github.com/fizvlad/io-request-rb"
   spec.license       = "MIT"
 
-  spec.required_ruby_version = ">=2.3.1"
+  spec.required_ruby_version = ">=2.6.5"
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = "https://github.com/fizvlad/io-request-rb"
