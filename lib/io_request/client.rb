@@ -1,6 +1,8 @@
-require "base64"
-require "timeout"
-require "json"
+# frozen_string_literal: true
+
+require 'base64'
+require 'timeout'
+require 'json'
 
 module IORequest
   # Connection client.
@@ -21,7 +23,7 @@ module IORequest
       @out_requests = {} # Request => Proc
 
       @receive_thread = Thread.new { receive_loop }
-      IORequest.debug("New IORequest client initialized", prog_name)
+      IORequest.debug('New IORequest client initialized', prog_name)
     end
 
     # Send request.
@@ -65,33 +67,35 @@ module IORequest
       loop do
         h = receive(nil)
         break if h.nil?
+
         case h[:type]
-          when "request"
-            handle_in_request(Request.from_hash h)
-          when "response"
-            handle_in_response(Response.from_hash h)
-          else
-            IORequest.warn("Unknown message type: #{h[:type].inspect}", prog_name)
+        when 'request'
+          handle_in_request(Request.from_hash(h))
+        when 'response'
+          handle_in_response(Response.from_hash(h))
+        else
+          IORequest.warn("Unknown message type: #{h[:type].inspect}", prog_name)
         end
       end
-      IORequest.debug("Receive loop exited", prog_name)
+      IORequest.debug('Receive loop exited', prog_name)
     end
+
     # Handle incoming request.
     def handle_in_request(req)
       IORequest.debug("Handling request ##{req.id}", prog_name)
-      in_thread(name: "request_handler") do
+      in_thread(name: 'request_handler') do
         responder = find_responder(req)
         data = nil
         data = begin
           if responder
             responder.call(req, self)
           else
-            IORequest.warn "Responder not found!"
+            IORequest.warn 'Responder not found!'
             nil
           end
-        rescue Exception => e
-          IORequest.warn "Provided block raised exception:\n#{e.full_message}", prog_name
-          nil
+               rescue Exception => e
+                 IORequest.warn "Provided block raised exception:\n#{e.full_message}", prog_name
+                 nil
         end
         data ||= {}
         res = Response.new(data, req)
@@ -99,6 +103,7 @@ module IORequest
       end
       nil
     end
+
     # Handle incoming response.
     def handle_in_response(res)
       req_id = res.request.to_i
@@ -112,12 +117,10 @@ module IORequest
       # If block is not provided it's totally ok
       block = @out_requests.delete(req)
       if block
-        in_thread(name: "response_handle") do
-          begin
-            block.call(res)
-          rescue Exception => e
-            IORequest.warn("Provided block raised exception:\n#{e.full_message}", prog_name)
-          end
+        in_thread(name: 'response_handle') do
+          block.call(res)
+        rescue Exception => e
+          IORequest.warn("Provided block raised exception:\n#{e.full_message}", prog_name)
         end
       end
     end
@@ -140,7 +143,7 @@ module IORequest
     # @param [Hash]
     def send(data)
       IORequest.debug("Sending hash: #{data.inspect}", prog_name)
-      send_raw(encode(data_to_string data))
+      send_raw(encode(data_to_string(data)))
     end
 
     # Receive data.
@@ -149,10 +152,11 @@ module IORequest
     #
     # @return [Hash, nil] hash or +nil+ if timed out or IO was closed.
     def receive(timeout)
-      str = Timeout::timeout(timeout) do
+      str = Timeout.timeout(timeout) do
         receive_raw
       end
       return nil if str.nil?
+
       string_to_data(decode(str))
     rescue Timeout::Error
       nil
@@ -167,6 +171,7 @@ module IORequest
     def send_raw(str)
       @io_w.puts str
     end
+
     # Receive string.
     def receive_raw
       @io_r.gets&.chomp
@@ -174,17 +179,19 @@ module IORequest
 
     # Encode string
     def encode(str)
-      Base64::strict_encode64 str
+      Base64.strict_encode64 str
     end
+
     # Decode string
     def decode(str)
-      Base64::strict_decode64 str
+      Base64.strict_decode64 str
     end
 
     # Turn data into string
     def data_to_string(data)
       JSON.generate(data)
     end
+
     # Turn string into data
     def string_to_data(str)
       JSON.parse(str).symbolize_keys!

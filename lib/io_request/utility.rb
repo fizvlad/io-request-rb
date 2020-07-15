@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module IORequest
   # Utility methods.
   module Utility
@@ -29,18 +31,16 @@ module IORequest
       # @param thread_name [String] thread name.
       #
       # @return [Thread]
-      def in_thread(*args, name: nil, &block)
+      def in_thread(*args, name: nil)
         @_MultiThread_threads ||= []
         @_MultiThread_mutex ||= Mutex.new
         # Synchronizing addition/deletion of new threads. That's important
         @_MultiThread_mutex.synchronize do
           new_thread = Thread.new(*args) do |*in_args|
-            begin
-              block.call(*in_args)
-            ensure
-              @_MultiThread_mutex.synchronize do
-                @_MultiThread_threads.delete(Thread.current)
-              end
+            yield(*in_args)
+          ensure
+            @_MultiThread_mutex.synchronize do
+              @_MultiThread_threads.delete(Thread.current)
             end
           end
           @_MultiThread_threads << new_thread
@@ -101,4 +101,3 @@ class Hash
     end
   end
 end
-

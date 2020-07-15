@@ -1,9 +1,11 @@
+# frozen_string_literal: true
+
 module IORequest
   # Message to other side of IO.
   class Message
     # @return [Integer] ID of message.
     attr_reader :id
-    alias_method :to_i, :id
+    alias to_i id
 
     # @return [Hash] stored data.
     attr_reader :data
@@ -25,7 +27,7 @@ module IORequest
 
     # @return [Integer] random numerical ID based on current time and random salt.
     def self.generate_id
-      ((rand(999) + 1) * Time.now.to_f * 1000).to_i % 2**32
+      (rand(1..999) * Time.now.to_f * 1000).to_i % 2**32
     end
   end
 
@@ -52,7 +54,7 @@ module IORequest
 
     # @return [String] human readable form.
     def to_s
-      "#{super.to_s}; #{@response ? "Response ID: #{@response.to_i}" : "Not responded"}"
+      "#{super}; #{@response ? "Response ID: #{@response.to_i}" : 'Not responded'}"
     end
 
     # Freezes thread until request is responded or until timeout expends.
@@ -70,7 +72,7 @@ module IORequest
 
     # Save into hash.
     def to_hash
-      { type: "request", data: @data, id: @id, response: @response.to_i }
+      { type: 'request', data: @data, id: @id, response: @response.to_i }
     end
 
     # Initialize new request from hash obtained with {Request#to_hash}.
@@ -96,12 +98,12 @@ module IORequest
 
     # @return [String] human readable form.
     def to_s
-      "#{super.to_s}; Initial request ID: #{@request.to_i}"
+      "#{super}; Initial request ID: #{@request.to_i}"
     end
 
     # Save into hash.
     def to_hash
-      { type: "response", data: @data, id: @id, request: @request.to_i }
+      { type: 'response', data: @data, id: @id, request: @request.to_i }
     end
 
     # Initialize new request from hash obtained with {Response#to_hash}.

@@ -1,4 +1,6 @@
-require_relative "test_helper"
+# frozen_string_literal: true
+
+require_relative 'test_helper'
 
 class ClientIOTest < Minitest::Test
   def setup
@@ -8,6 +10,7 @@ class ClientIOTest < Minitest::Test
     @client_1 = IORequest::Client.new read: @r1, write: @w2
     @client_2 = IORequest::Client.new read: @r2, write: @w1
   end
+
   def teardown
     @r1.close
     @w1.close
@@ -16,13 +19,13 @@ class ClientIOTest < Minitest::Test
   end
 
   def test_simple_request
-    @client_2.respond do |request|
-      { num: 1, string: "str" }
+    @client_2.respond do |_request|
+      { num: 1, string: 'str' }
     end
 
     @client_1.request sync: true do |response|
       assert_equal(1, response.data[:num])
-      assert_equal("str", response.data[:string])
+      assert_equal('str', response.data[:string])
       assert_nil(response.data[:sync])
       assert_nil(response.data[:timeout])
     end
@@ -36,7 +39,6 @@ class ClientIOTest < Minitest::Test
       sleep sleep_time
       { num: request.data[:num] }
     end
-    
 
     requests = Array.new(total) do |i|
       @client_1.request data: { sleep_time: total - i, num: i } do |response|

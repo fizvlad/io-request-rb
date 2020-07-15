@@ -1,14 +1,15 @@
-require "logger"
+# frozen_string_literal: true
+
+require 'logger'
 
 module IORequest
   # @!group Logger
 
   # Default logger.
   @@logger = Logger.new($LOG_FILE || STDOUT,
-    formatter: Proc.new do |severity, datetime, progname, msg|
-      "[#{datetime}] #{severity} - #{progname}:\t #{msg}\n"
-    end
-  )
+                        formatter: proc do |severity, datetime, progname, msg|
+                          "[#{datetime}] #{severity} - #{progname}:\t #{msg}\n"
+                        end)
   @@logger.level = $DEBUG ? Logger::DEBUG : Logger::INFO
 
   # Setup new logger.
@@ -27,7 +28,7 @@ module IORequest
 
   # Log message.
   def self.log(severity, message = nil, progname = nil)
-    @@logger.log(severity, message, progname) if @@logger
+    @@logger&.log(severity, message, progname)
   end
 
   # Log warning message.

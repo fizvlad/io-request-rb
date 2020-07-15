@@ -1,4 +1,6 @@
-require_relative "test_helper"
+# frozen_string_literal: true
+
+require_relative 'test_helper'
 
 class TestingClass
   include IORequest::Utility::MultiThread
@@ -33,7 +35,7 @@ end
 class MultiThreadTest < Minitest::Test
   WAIT_TIME = 2
 
-  def test_in_thread 
+  def test_in_thread
     t = TestingClass.new(0)
     t.inc_in(WAIT_TIME, 1)
     sleep 1
