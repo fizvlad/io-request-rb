@@ -8,4 +8,13 @@ require_relative 'io_request/message'
 require_relative 'io_request/client'
 
 # Main module.
-module IORequest; end
+module IORequest
+  # @return [Logger]
+  def self.logger
+    @@logger ||= Logger.new
+  end
+  # @param new_logger [Logger]
+  def self.logger=(new_logger)
+    @@logger =new_logger
+  end
+end
