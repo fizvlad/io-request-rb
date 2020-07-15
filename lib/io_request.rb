@@ -7,6 +7,8 @@ require_relative 'io_request/utility/multi_thread'
 require_relative 'io_request/authorizer'
 require_relative 'io_request/client'
 
+require 'logger'
+
 # Main module.
 module IORequest
   # @return [Logger]
