@@ -37,9 +37,9 @@ module IORequest
     # @param r [IO] object to read from.
     # @param w [IO] object to write to.
     # @param rw [IO] read-write object (replaces `r` and `w` arguments).
-    def open(r: nil, w: nil, rw: nil)
-      @io_r = rw ? rw : r
-      @io_w = rw ? rw : w
+    def open(read: nil, write: nil, read_write: nil)
+      @io_r = read_write || read
+      @io_w = read_write || write
 
       IORequest.logger.debug 'Opening connection in separate thread'
       in_thread(name: 'connection') { connection }
@@ -49,8 +49,8 @@ module IORequest
     def close
       IORequest.logger.debug 'Closing connection'
       begin
-        send_zero_size_message
-      rescue StandardError => e
+        send_zero_size_request
+      rescue StandardError
         IORequest.logger.debug 'Failed to send zero-sized message. Closing anyway'
       end
       close_io
@@ -60,13 +60,15 @@ module IORequest
     # @yieldparam [Hash]
     # @yieldreturn [Hash]
     def respond(&block)
+      IORequest.logger.debug 'Saved responder block'
       @responder = block
     end
 
-    # @param sync [Boolean]
     # @param data [Hash]
-    def request(data, sync: true)
-      # TODO
+    # @yieldparam[Hash]
+    def request(data)
+      reply = send_request(data)
+      yield(reply[:data])
     end
 
     attr_reader :authorizer
@@ -86,17 +88,16 @@ module IORequest
     def authorization
       IORequest.logger.debug 'Authorizing new client'
       raise 'Authorization failed' unless @authorizer.authorize(@io_r, @io_w)
+
       IORequest.logger.debug "New client authorized with data #{@authorizer.data}"
     end
 
     def data_transition_loop
       loop do
-        begin
           data_transition_iteration
-        rescue StandardError => e
-          IORequest.logger.warn "Data transition iteration failed:\n#{e.full_message}"
-          break
-        end
+      rescue StandardError => e
+        IORequest.logger.warn "Data transition iteration failed:\n#{e.full_message}"
+        break
       end
     end
 
@@ -104,7 +105,12 @@ module IORequest
       # TODO
     end
 
-    def send_zero_size_message
+    def send_request
       # TODO
     end
+
+    def send_zero_size_request
+      # TODO
+    end
+  end
 end
