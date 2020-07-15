@@ -1,22 +1,14 @@
 # IORequest
 
-Small gem to create JSON request/response type of connection over IO object
+Small gem to create JSON request/response type of connection over different IO objects.
 
 ## Installation
 
-Add this line to your application's Gemfile:
+Using [bundler](https://bundler.io/):
 
-```ruby
-gem 'io_request'
 ```
-
-And then execute:
-
-    $ bundle
-
-Or install it yourself as:
-
-    $ gem install io_request
+$ bundle add io_request
+```
 
 ## Usage
 
