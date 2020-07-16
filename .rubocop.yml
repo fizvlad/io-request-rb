@@ -19,6 +19,17 @@ AllCops:
 Layout/EndOfLine:
   Enabled: false
 
+# Disable some common cops for tests
+Style/Documentation:
+  Exclude:
+    - test/**/*
+Metrics/AbcSize:
+  Exclude:
+    - test/**/*
+Metrics/MethodLength:
+  Exclude:
+    - test/**/*
+
 # Just enough
 Layout/LineLength:
   Max: 100
