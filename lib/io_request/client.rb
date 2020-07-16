@@ -64,11 +64,18 @@ module IORequest
       @responder = block
     end
 
+    # If callback block is provided, request will be sent asynchroniously.
     # @param data [Hash]
-    # @yieldparam[Hash]
-    def request(data)
-      reply = send_request(data)
-      yield(reply[:data])
+    def request(data = {}, &_callback)
+      message = Message.new(data, type: :request)
+      IORequest.logger.debug "Sending request #{message}"
+
+      if block_given?
+        in_thread(name: "req#{message.id}") { yield send_request_and_wait_for_response(message) }
+        nil
+      else
+        send_request_and_wait_for_response(message)
+      end
     end
 
     attr_reader :authorizer
