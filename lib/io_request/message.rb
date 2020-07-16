@@ -3,11 +3,6 @@
 module IORequest
   # Single message. Either request or response.
   class Message
-    # Message creation mutex
-    @@mutex = Mutex.new # rubocop:disable Style/ClassVars
-    # Messages counter
-    @@counter = 0 # rubocop:disable Style/ClassVars
-
     # Types of messages.
     TYPES = %i[request response].freeze
 
@@ -17,24 +12,33 @@ module IORequest
     # @param id [Integer, nil] only should be filled if message is received from outside.
     # @param to [Integer, nil] if message is response, it should include integer of original request.
     def initialize(data, type: :request, id: nil, to: nil)
-      @@mutex.synchronize do
-        @@counter += 1 # rubocop:disable Style/ClassVars
-
-        @data = data
-        @type = type
-        @id = id || @@counter
-        @to = to
-      end
+      @data = data
+      @type = type
+      @id = object_id
+      @to = to
     end
 
     # @return [Hash]
     attr_reader :data
 
+    # @return [Symbol]
+    attr_reader :type
+
     # @return [Integer]
     attr_reader :id
 
-    # @return [Symbol]
-    attr_reader :type
+    # @return [Integer]
+    attr_reader :to
+
+    # @return [Boolean]
+    def request?
+      @type == :request
+    end
+
+    # @return [Boolean]
+    def response?
+      @type == :response
+    end
 
     # @return [String]
     def to_s
@@ -63,7 +67,7 @@ module IORequest
       size = io_r.read(2).unpack1('S')
       json_string = io_r.read(size).unpack1("a#{size}")
       msg = JSON.parse(json_string, symbolize_names: true)
-      Message.new(msg[:data], id: msg[:id], type: msg[:type])
+      Message.new(msg[:data], id: msg[:id].to_i, type: msg[:type].to_sym)
     end
   end
 end
