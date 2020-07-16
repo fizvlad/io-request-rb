@@ -19,6 +19,14 @@ AllCops:
 Layout/EndOfLine:
   Enabled: false
 
+# Extend limit of lines in method
+Metrics/MethodLength:
+  Max: 15
+
+# Just enough
+Layout/LineLength:
+  Max: 100
+
 # Disable some common cops for tests
 Style/Documentation:
   Exclude:
@@ -29,7 +37,3 @@ Metrics/AbcSize:
 Metrics/MethodLength:
   Exclude:
     - test/**/*
-
-# Just enough
-Layout/LineLength:
-  Max: 100
