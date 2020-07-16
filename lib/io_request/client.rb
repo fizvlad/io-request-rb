@@ -94,7 +94,7 @@ module IORequest
 
     def data_transition_loop
       loop do
-          data_transition_iteration
+        data_transition_iteration
       rescue StandardError => e
         IORequest.logger.warn "Data transition iteration failed:\n#{e.full_message}"
         break
@@ -102,15 +102,19 @@ module IORequest
     end
 
     def data_transition_iteration
-      # TODO
-    end
-
-    def send_request
-      # TODO
+      # TODO: read message size
+      # TODO: read JSON
+      # TODO: if it is request pass data to responder, get reply and send it
+      # TODO: if it is response, get data and pass it to awaiting requester
     end
 
     def send_zero_size_request
-      # TODO
+      # TODO: send zero
+      # TODO: close connection
+    end
+
+    def send_request_and_wait_for_response(request)
+      request.write_to(@io_w)
     end
   end
 end
