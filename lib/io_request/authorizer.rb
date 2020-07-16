@@ -19,8 +19,9 @@ module IORequest
     def authorize(io_r, io_w)
       @data = nil
       @data = @block.call(io_r, io_w)
-      @data.nil?
-    rescue StandardError
+      !@data.nil?
+    rescue StandardError => e
+      IORequest.logger.error(e.full_message)
       false
     end
   end
