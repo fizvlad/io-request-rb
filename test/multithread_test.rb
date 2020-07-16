@@ -5,7 +5,9 @@ require_relative 'test_helper'
 class TestingClass
   include IORequest::Utility::MultiThread
 
-  attr_reader :num
+  def num
+    @mutex.synchronize { @num }
+  end
 
   def initialize(num = 0)
     @num = num
@@ -13,9 +15,9 @@ class TestingClass
   end
 
   def inc_in(time, inc = 1)
-    in_thread(inc) do |in_inc|
+    in_thread do
       sleep time
-      @mutex.synchronize { @num += in_inc }
+      @mutex.synchronize { @num += inc }
     end
   end
 
@@ -60,8 +62,9 @@ class MultiThreadTest < Minitest::Test
 
   def test_killing_threads
     t = TestingClass.new(0)
-    n = 10
+    n = 20
     n.times { t.inc_in(WAIT_TIME, 1) }
+    assert_equal(n, t.threads.size)
     sleep 1
     t.kill
     assert_equal(0, t.num)
@@ -72,6 +75,7 @@ class MultiThreadTest < Minitest::Test
     t = TestingClass.new(0)
     n = 100
     n.times { t.inc_in(WAIT_TIME, 1) }
+    assert_equal(n, t.threads.size)
     sleep 1
     t.join
     assert_equal(n, t.num)

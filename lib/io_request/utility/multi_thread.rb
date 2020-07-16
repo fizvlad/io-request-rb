@@ -52,6 +52,7 @@ module IORequest
       # Kills each thread.
       def kill_threads
         each_thread(&:kill)
+        each_thread(&:join)
       end
 
       # Joins each thread.
