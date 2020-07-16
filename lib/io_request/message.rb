@@ -13,15 +13,17 @@ module IORequest
 
     # Create new message.
     # @param data [Hash]
-    # @param id [Integer, nil] only should be filled if message is received from outside.
     # @param type [Symbol] one of {TYPES} member.
-    def initialize(data, id: nil, type: :request)
+    # @param id [Integer, nil] only should be filled if message is received from outside.
+    # @param to [Integer, nil] if message is response, it should include integer of original request.
+    def initialize(data, type: :request, id: nil, to: nil)
       @@mutex.synchronize do
         @@counter += 1 # rubocop:disable Style/ClassVars
 
         @data = data
-        @id = @@counter
         @type = type
+        @id = id || @@counter
+        @to = to
       end
     end
 
@@ -39,6 +41,7 @@ module IORequest
       json_string = JSON.generate({
                                     id: @id,
                                     type: @type.to_s,
+                                    to: @to,
                                     data: @data
                                   })
       [json_string.size, json_string].pack("Sa#{json_string.size}")
