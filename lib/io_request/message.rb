@@ -36,6 +36,11 @@ module IORequest
     # @return [Symbol]
     attr_reader :type
 
+    # @return [String]
+    def to_s
+      "#{type}##{@id}: #{data}"
+    end
+
     # @return [String] binary data to be passed over IO.
     def to_binary
       json_string = JSON.generate({
