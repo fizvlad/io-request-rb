@@ -14,10 +14,11 @@ require 'logger'
 module IORequest
   # @return [Logger]
   def self.logger
-    @@logger ||= Logger.new(STDOUT)
+    @@logger ||= Logger.new(STDOUT) # rubocop:disable Style/ClassVars
   end
+
   # @param new_logger [Logger]
   def self.logger=(new_logger)
-    @@logger =new_logger
+    @@logger =new_logger # rubocop:disable Style/ClassVars
   end
 end
