@@ -13,7 +13,7 @@ require 'logger'
 module IORequest
   # @return [Logger]
   def self.logger
-    @@logger ||= Logger.new
+    @@logger ||= Logger.new(STDOUT)
   end
   # @param new_logger [Logger]
   def self.logger=(new_logger)
