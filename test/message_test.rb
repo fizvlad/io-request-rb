@@ -26,6 +26,7 @@ class MessageTest < Minitest::Test
     msg1 = IORequest::Message.new({ str: 'string', num: 42 })
     msg1.write_to(io_w)
     msg2 = IORequest::Message.read_from(io_r)
+    assert_equal msg1.id, msg2.id
     assert_equal msg1.data, msg2.data
   end
 end
