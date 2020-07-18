@@ -11,3 +11,7 @@ gem 'json', '~> 2.3'
 gem 'timeout', '~> 0.1.0'
 
 gem 'logger', '~> 1.4'
+
+gem 'openssl', '~> 2.2'
+
+gem 'pry', '~> 0.13.1'
