@@ -145,7 +145,7 @@ module IORequest
       message = @mutex_r.synchronize { Message.read_from(@io_r) }
       IORequest.logger.debug(prog_name) { "Received message: #{message}" }
       if message.request?
-        handle_request(message)
+        in_thread(name: 'responding') { handle_request(message) }
       else
         handle_response(message)
       end
