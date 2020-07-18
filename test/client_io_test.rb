@@ -5,17 +5,22 @@ require_relative 'test_helper'
 class ClientIOTest < Minitest::Test
   def setup
     @r1, @w1 = IO.pipe
-    @client1 = IORequest::Client.new
-    @client1.open read: @r1, write: @w2
-
     @r2, @w2 = IO.pipe
+
+    @client1 = IORequest::Client.new
     @client2 = IORequest::Client.new
-    @client2.open read: @r2, write: @w1
+
+    @thread1 = Thread.new { @client1.open read: @r1, write: @w2 }
+    @thread2 = Thread.new { @client2.open read: @r2, write: @w1 }
+    sleep 3 # Wait some time for clients to be ready
   end
 
   def teardown
     @client1.close
     @client2.close
+
+    @thread1.join
+    @thread2.join
   end
 
   def test_simple_request
@@ -23,12 +28,9 @@ class ClientIOTest < Minitest::Test
       { num: 1, string: 'str' }
     end
 
-    @client1.request do |data|
-      assert_equal(1, data[:num])
-      assert_equal('str', data[:string])
-      assert_nil(data[:sync])
-      assert_nil(data[:timeout])
-    end
+    data = @client1.request
+    assert_equal(1, data[:num])
+    assert_equal('str', data[:string])
   end
 
   def test_intersecting_requests
@@ -39,10 +41,10 @@ class ClientIOTest < Minitest::Test
       { num: data[:num] }
     end
 
-    requests = Array.new(total) do |i|
+    Array.new(total) do |i|
       @client1.request({ sleep_time: total - i, num: i }) { |data| assert_equal(i, data[:num]) }
     end
 
-    requests.each(&:join)
+    sleep total + 1
   end
 end
