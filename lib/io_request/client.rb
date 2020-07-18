@@ -71,7 +71,7 @@ module IORequest
 
       if block_given?
         # Async execution of request
-        in_thread(callback, name: "req#{message.id}") do |cb|
+        in_thread(callback, name: 'requesting') do |cb|
           cb.call(send_request_and_wait_for_response(message).data)
         end
         nil
@@ -96,11 +96,11 @@ module IORequest
     end
 
     def stop_data_transition
-      unless @data_trasition_thread.nil?
-        IORequest.logger.debug(prog_name) { 'Killing data transition thread' }
-        @data_trasition_thread.kill
-        @data_trasition_thread = nil
-      end
+      return if @data_trasition_thread.nil?
+
+      IORequest.logger.debug(prog_name) { 'Killing data transition thread' }
+      @data_trasition_thread.kill
+      @data_trasition_thread = nil
     end
 
     def close_io
