@@ -1,4 +1,6 @@
-require "io_request"
+# frozen_string_literal: true
+
+require 'io_request'
 
 r1, w1 = IO.pipe
 r2, w2 = IO.pipe
@@ -9,25 +11,25 @@ client_2 = IORequest::Client.new read: r2, write: w1
 # Use
 # Set up responders
 # Authorization
-client_2.respond type: "auth" do |request|
+client_2.respond type: 'auth' do |request|
   puts "Client 2: Authorization attempt as #{request.data[:username].inspect}"
   sleep 2 # Some processing
-  { type: "auth_success" }
+  { type: 'auth_success' }
 end
 
 # Default
 client_2.respond do |request|
   puts "Client 2: #{request.data.inspect}"
-  { type: "success" }
+  { type: 'success' }
 end
 
 # Send requests
 auth = false
 auth_request = client_1.request(
-  data: { type: "auth", username: "mymail@example.com", password: "let's pretend password hash is here" },
+  data: { type: 'auth', username: 'mymail@example.com', password: "let's pretend password hash is here" },
   sync: true
 ) do |response|
-  unless response.data[:type] == "auth_success"
+  unless response.data[:type] == 'auth_success'
     puts "Client 1: Authorization failed. Response: #{response.data.inspect}"
     next
   end
@@ -36,13 +38,13 @@ auth_request = client_1.request(
   # Do something
 end
 exit unless auth
-puts "Client 1: Authorized!"
+puts 'Client 1: Authorized!'
 
 message = client_1.request(
-  data: { type: "message", message: "Hello!" },
+  data: { type: 'message', message: 'Hello!' },
   sync: true
-) do |response|
-  puts "Client 1: Message responded"
+) do |_response|
+  puts 'Client 1: Message responded'
 end
 
 # Close

@@ -1,193 +1,206 @@
-require "base64"
-require "timeout"
-require "json"
+# frozen_string_literal: true
+
+require 'timeout'
+require 'json'
 
 module IORequest
   # Connection client.
+  #
+  # General scheme:
+  #  Client 1                 Client 2
+  #     |                        |
+  #   (        Authorization       )  See `Authorizer` class. Error in authorization should close
+  #     |                        |    connection
+  #     |                        |
+  #   [    Data transition loop    ]  Loop runs until someone sends 0 sized data. Then everyone
+  #     |                        |    should close connection. Any R/W errors should also finish the
+  #     |                        |    loop
+  #     |                        |
+  #     |-> uint(2 bytes)      ->|    Specifies size of following JSON string
+  #     |-> Mesage as JSON     ->|    Message itself. It should contain its `type`, `id` and some
+  #     |                        |    data hash
+  #     |                        |
+  #     |               (Message handling) See `Handler` class
+  #     |                        |
+  #     |<- uint(2 bytes)      <-|
+  #     |<- Mesage as JSON     <-|
   class Client
     include Utility::WithProgName
     include Utility::MultiThread
 
-    # Initialize new client over IO.
-    #
-    # @option options [:gets] read IO to read from.
-    # @option options [:puts] write IO to write to.
-    def initialize(read: nil, write: nil)
-      @io_r = read
-      @io_w = write
+    # Initialize new client.
+    def initialize(authorizer: Authorizer.empty)
+      @open = false
+      @authorizer = authorizer
 
-      @mutex = Mutex.new
-      @responders = [] # Array of pairs [Subhash, Block]
-      @out_requests = {} # Request => Proc
+      @mutex_r = Mutex.new
+      @mutex_w = Mutex.new
 
-      @receive_thread = Thread.new { receive_loop }
-      IORequest.debug("New IORequest client initialized", prog_name)
+      @responses = {}
+      @responses_access_mutex = Mutex.new
+      @responses_access_cv = ConditionVariable.new
     end
 
-    # Send request.
-    #
-    # Optional block can be provided. It will be called when response received.
-    #
-    # @option options [Hash] data data to send.
-    # @option options [Boolean] sync whether to join request after sending.
-    # @option options [Integer, Float] timeout timeout for {Request#join}.
-    #
-    # @yieldparam request [Response] response for request.
-    #
-    # @return [Request]
-    def request(data: {}, sync: false, timeout: nil, &block)
-      req = Request.new(data)
-      @out_requests[req] = block
-      IORequest.debug("Sending request ##{req.id}", prog_name)
-      send(req.to_hash)
-      req.join(timeout) if sync
-      req
+    # Start new client connection.
+    # @param r [IO] object to read from.
+    # @param w [IO] object to write to.
+    # @param rw [IO] read-write object (replaces `r` and `w` arguments).
+    def open(read: nil, write: nil, read_write: nil)
+      @io_r = read_write || read
+      @io_w = read_write || write
+
+      IORequest.logger.debug(prog_name) { 'Starting connection' }
+
+      authorization
+      @open = true
+      @data_transition_thread = in_thread(name: 'connection') { data_transition_loop }
     end
 
-    # Setup block for answering incoming requests.
-    #
-    # @param subdata [Hash] provided block will be called only if received data
-    #   includes this hash.
-    #
-    # @yieldparam request [Request] incoming request.
-    # @yieldreturn [Hash] data to be sent in response.
-    #
-    # @return [nil]
-    def respond(subdata = {}, &block)
-      @responders << [subdata, block]
-      nil
+    def open?
+      @open
     end
+
+    # Close connection.
+    def close
+      close_internal
+      join_threads
+      @open = false
+    end
+
+    # @yieldparam [Hash]
+    # @yieldreturn [Hash]
+    def respond(&block)
+      IORequest.logger.debug(prog_name) { 'Saved responder block' }
+      @responder = block
+    end
+
+    # If callback block is provided, request will be sent asynchroniously.
+    # @param data [Hash]
+    def request(data = {}, &callback)
+      message = Message.new(data, type: :request)
+
+      if block_given?
+        # Async execution of request
+        in_thread(callback, name: 'requesting') do |cb|
+          cb.call(send_request_and_wait_for_response(message).data)
+        end
+        nil
+      else
+        send_request_and_wait_for_response(message).data
+      end
+    end
+
+    attr_reader :authorizer
 
     private
 
-    # Starts receiving loop and freezes thread.
-    def receive_loop
+    def close_internal
+      IORequest.logger.debug(prog_name) { 'Closing connection' }
+      begin
+        send_zero_size_request
+      rescue StandardError
+        IORequest.logger.debug(prog_name) { 'Failed to send zero-sized message. Closing anyway' }
+      end
+      stop_data_transition
+      close_io
+    end
+
+    def stop_data_transition
+      return unless defined?(@data_transition_thread) && !@data_transition_thread.nil?
+
+      IORequest.logger.debug(prog_name) { 'Killing data transition thread' }
+      @data_transition_thread.kill
+      @data_transition_thread = nil
+    end
+
+    def close_io
+      IORequest.logger.debug(prog_name) { 'Closing IO' }
+      @mutex_r.synchronize { @io_r&.close }
+      @mutex_w.synchronize { @io_w&.close }
+    end
+
+    def authorization
+      auth_successful = @mutex_r.synchronize do
+        @mutex_w.synchronize do
+          IORequest.logger.debug(prog_name) { 'Authorizing new client' }
+          @authorizer.authorize(@io_r, @io_w)
+        end
+      end
+      unless auth_successful
+        IORequest.logger.debug(prog_name) { 'Authorization failed' }
+        raise 'Authorization failed'
+      end
+
+      IORequest.logger.debug(prog_name) { "New client authorized with data #{@authorizer.data}" }
+    end
+
+    def data_transition_loop
+      IORequest.logger.debug(prog_name) { 'Starting data transition loop' }
       loop do
-        h = receive(nil)
-        break if h.nil?
-        case h[:type]
-          when "request"
-            handle_in_request(Request.from_hash h)
-          when "response"
-            handle_in_response(Response.from_hash h)
-          else
-            IORequest.warn("Unknown message type: #{h[:type].inspect}", prog_name)
+        data_transition_iteration
+      rescue StandardError => e
+        IORequest.logger.debug(prog_name) { "Data transition iteration failed: #{e}" }
+        break
+      end
+      close_internal
+    end
+
+    def data_transition_iteration
+      message = @mutex_r.synchronize { Message.read_from(@io_r) }
+      IORequest.logger.debug(prog_name) { "Received message: #{message}" }
+      if message.request?
+        in_thread(name: 'responding') { handle_request(message) }
+      else
+        handle_response(message)
+      end
+    end
+
+    def handle_request(message)
+      data = @responder&.call(message.data) || {}
+      response = Message.new(data, type: :response, to: message.id)
+      send_response(response)
+    end
+
+    def handle_response(message)
+      @responses_access_mutex.synchronize do
+        @responses[message.to.to_s] = message
+        @responses_access_cv.broadcast
+      end
+    end
+
+    def send_response(response)
+      @mutex_w.synchronize do
+        IORequest.logger.debug(prog_name) { "Sending response: #{response}" }
+        response.write_to(@io_w)
+      end
+    end
+
+    def send_zero_size_request
+      @mutex_w.synchronize do
+        IORequest.logger.debug(prog_name) { 'Sending zero size message' }
+        @io_w.write([0].pack('S'))
+      end
+    end
+
+    def send_request_and_wait_for_response(request)
+      @mutex_w.synchronize do
+        IORequest.logger.debug(prog_name) { "Sending message: #{request}" }
+        request.write_to(@io_w)
+      end
+      wait_for_response(request)
+    end
+
+    def wait_for_response(request)
+      IORequest.logger.debug(prog_name) { "Waiting for response for #{request}" }
+      @responses_access_mutex.synchronize do
+        response = nil
+        until response
+          @responses_access_cv.wait(@responses_access_mutex)
+          response = @responses[request.id.to_s]
         end
+        IORequest.logger.debug(prog_name) { "Found response: #{response}" }
+        response
       end
-      IORequest.debug("Receive loop exited", prog_name)
-    end
-    # Handle incoming request.
-    def handle_in_request(req)
-      IORequest.debug("Handling request ##{req.id}", prog_name)
-      in_thread(name: "request_handler") do
-        responder = find_responder(req)
-        data = nil
-        data = begin
-          if responder
-            responder.call(req, self)
-          else
-            IORequest.warn "Responder not found!"
-            nil
-          end
-        rescue Exception => e
-          IORequest.warn "Provided block raised exception:\n#{e.full_message}", prog_name
-          nil
-        end
-        data ||= {}
-        res = Response.new(data, req)
-        send(res.to_hash)
-      end
-      nil
-    end
-    # Handle incoming response.
-    def handle_in_response(res)
-      req_id = res.request.to_i
-      req = @out_requests.keys.find { |r| r.id == req_id }
-      unless req
-        IORequest.warn("Request ##{req_id} not found", prog_name)
-        return
-      end
-      IORequest.debug("Request ##{req_id} response received", prog_name)
-      req.response = res
-      # If block is not provided it's totally ok
-      block = @out_requests.delete(req)
-      if block
-        in_thread(name: "response_handle") do
-          begin
-            block.call(res)
-          rescue Exception => e
-            IORequest.warn("Provided block raised exception:\n#{e.full_message}", prog_name)
-          end
-        end
-      end
-    end
-
-    # find responder for provided request.
-    def find_responder(req)
-      result = nil
-      @responders.each do |subdata, block|
-        if req.data.contains? subdata
-          result = block
-          break
-        end
-      end
-
-      result
-    end
-
-    # Send data.
-    #
-    # @param [Hash]
-    def send(data)
-      IORequest.debug("Sending hash: #{data.inspect}", prog_name)
-      send_raw(encode(data_to_string data))
-    end
-
-    # Receive data.
-    #
-    # @param timeout [Integer, Float, nil] timeout size or +nil+ if no timeout required.
-    #
-    # @return [Hash, nil] hash or +nil+ if timed out or IO was closed.
-    def receive(timeout)
-      str = Timeout::timeout(timeout) do
-        receive_raw
-      end
-      return nil if str.nil?
-      string_to_data(decode(str))
-    rescue Timeout::Error
-      nil
-    rescue IOError
-      nil
-    rescue Exception => e
-      IORequest.warn "Exception of #{e.class} encountered while trying to receive message. Suggesting IO was closed. Full trace: #{e.full_message}", prog_name
-      nil
-    end
-
-    # Send string.
-    def send_raw(str)
-      @io_w.puts str
-    end
-    # Receive string.
-    def receive_raw
-      @io_r.gets&.chomp
-    end
-
-    # Encode string
-    def encode(str)
-      Base64::strict_encode64 str
-    end
-    # Decode string
-    def decode(str)
-      Base64::strict_decode64 str
-    end
-
-    # Turn data into string
-    def data_to_string(data)
-      JSON.generate(data)
-    end
-    # Turn string into data
-    def string_to_data(str)
-      JSON.parse(str).symbolize_keys!
     end
   end
 end

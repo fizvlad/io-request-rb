@@ -1,112 +1,94 @@
-module IORequest
-  # Message to other side of IO.
-  class Message
-    # @return [Integer] ID of message.
-    attr_reader :id
-    alias_method :to_i, :id
+# frozen_string_literal: true
 
-    # @return [Hash] stored data.
+module IORequest
+  # Single message. Either request or response.
+  class Message
+    include Utility::WithID
+    # Types of messages.
+    TYPES = %i[request response].freeze
+
+    # Create new message.
+    # @param data [Hash]
+    # @param type [Symbol] one of {TYPES} member.
+    # @param id [Utility::ExtendedID, String, nil] only should be filled if message is received from outside.
+    # @param to [Utility::ExtendedID, String, nil] if message is response, it should include integer
+    #   of original request.
+    def initialize(data, type: :request, id: nil, to: nil)
+      @data = data
+      @type = type
+      @id = id.nil? ? extended_id : Utility::ExtendedID.from(id)
+      @to = to.nil? ? nil : Utility::ExtendedID.from(to)
+
+      check_data
+    end
+
+    # Check data correctness.
+    def check_data
+      raise '@data is not a hash' unless @data.is_a? Hash
+      raise 'incorrect @type' unless TYPES.include? @type
+      raise 'incorrect @id' unless @id.is_a? Utility::ExtendedID
+      raise '@to not specified for response' if response? && @to.nil?
+    end
+
+    # @return [Hash]
     attr_reader :data
 
-    # Initialize new message.
-    #
-    # @param data [Hash]
-    # @param id [Integer, nil] if +nil+ provided {Message.generate_id} will be
-    #   used to generate random id.
-    def initialize(data, id = nil)
-      @id = id || Message.generate_id
-      @data = data
+    # @return [Symbol]
+    attr_reader :type
+
+    # @return [Utility::ExtendedID]
+    attr_reader :id
+
+    # @return [Utility::ExtendedID]
+    attr_reader :to
+
+    # @return [Boolean]
+    def request?
+      @type == :request
     end
 
-    # @return [String] human-readable form.
+    # @return [Boolean]
+    def response?
+      @type == :response
+    end
+
+    # @return [String]
     def to_s
-      "#{self.class.name}##{@id}: #{@data.inspect}"
-    end
-
-    # @return [Integer] random numerical ID based on current time and random salt.
-    def self.generate_id
-      ((rand(999) + 1) * Time.now.to_f * 1000).to_i % 2**32
-    end
-  end
-
-  # Request for server or client.
-  class Request < Message
-    # Amount of time to sleep before checking whether responded.
-    JOIN_SLEEP_TIME = 0.5
-
-    # @return [Integer, Response, nil] ID of response or response itself for this message.
-    attr_reader :response
-
-    # @!visibility private
-    attr_writer :response
-
-    # Initialize new request.
-    #
-    # @param data [Hash]
-    # @param response [Integer, Response, nil]
-    # @param id [Integer, nil]
-    def initialize(data, response = nil, id = nil)
-      @response = response
-      super(data, id)
-    end
-
-    # @return [String] human readable form.
-    def to_s
-      "#{super.to_s}; #{@response ? "Response ID: #{@response.to_i}" : "Not responded"}"
-    end
-
-    # Freezes thread until request is responded or until timeout expends.
-    #
-    # @param timeout [Integer, Float, nil] timeout size or +nil+ if no timeout.
-    #
-    # @return [Integer] amount of time passed
-    def join(timeout = nil)
-      time_passed = 0
-      while @response.nil? && (timeout.nil? || time_passed < timeout)
-        time_passed += (sleep JOIN_SLEEP_TIME)
+      if request?
+        "Request##{@id}: #{data}"
+      else
+        "Response##{@id}: #{data} to ##{@to}"
       end
-      time_passed
     end
 
-    # Save into hash.
-    def to_hash
-      { type: "request", data: @data, id: @id, response: @response.to_i }
+    # @return [String] binary data to be passed over IO.
+    def to_binary
+      json_string = JSON.generate({
+                                    id: @id.to_s,
+                                    type: @type.to_s,
+                                    to: @to.to_s,
+                                    data: @data
+                                  })
+      [json_string.size, json_string].pack("Sa#{json_string.size}")
     end
 
-    # Initialize new request from hash obtained with {Request#to_hash}.
-    def self.from_hash(hash)
-      Request.new(hash[:data], hash[:response], hash[:id])
-    end
-  end
-
-  # Response to some request.
-  class Response < Message
-    # @return [Integer, Request] ID of initial request or request itself.
-    attr_reader :request
-
-    # Initialize new response.
-    #
-    # @param data [Hash]
-    # @param request [Integer, Request]
-    # @param id [Integer, nil]
-    def initialize(data, request, id = nil)
-      @request = request
-      super(data, id)
+    # @param io_w [:write]
+    def write_to(io_w)
+      io_w.write(to_binary)
     end
 
-    # @return [String] human readable form.
-    def to_s
-      "#{super.to_s}; Initial request ID: #{@request.to_i}"
-    end
+    # @param io_r [:read]
+    # @return [Message]
+    def self.read_from(io_r)
+      size = io_r.read(2).unpack1('S')
+      raise '0 size received' if size.zero?
 
-    # Save into hash.
-    def to_hash
-      { type: "response", data: @data, id: @id, request: @request.to_i }
-    end
-
-    # Initialize new request from hash obtained with {Response#to_hash}.
-    def self.from_hash(hash)
-      Response.new(hash[:data], hash[:request], hash[:id])
+      json_string = io_r.read(size).unpack1("a#{size}")
+      msg = JSON.parse(json_string, symbolize_names: true)
+      Message.new(msg[:data],
+                  id: msg[:id],
+                  type: msg[:type].to_sym,
+                  to: msg[:to])
     end
   end
 end
