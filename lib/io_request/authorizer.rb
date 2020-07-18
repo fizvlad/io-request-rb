@@ -27,5 +27,16 @@ module IORequest
   end
 
   # No authorization.
-  Authorizer::Empty = Authorizer.new { |_io_r, _io_w| true }
+  def Authorizer.empty
+    Authorizer.new { |_io_r, _io_w| true }
+  end
+
+  # Secret key authorization.
+  def Authorizer.by_secret_key(key)
+    Authorizer.new do |io_r, io_w|
+      io_w.write(key)
+      other = io_r.read(key.size)
+      key == other ? other : nil
+    end
+  end
 end
