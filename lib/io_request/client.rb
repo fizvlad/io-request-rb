@@ -53,7 +53,7 @@ module IORequest
 
       authorization
       @open = true
-      @data_trasition_thread = in_thread(name: 'connection') { data_transition_loop }
+      @data_transition_thread = in_thread(name: 'connection') { data_transition_loop }
     end
 
     def open?
@@ -106,11 +106,11 @@ module IORequest
     end
 
     def stop_data_transition
-      return if @data_trasition_thread.nil?
+      return unless defined?(@data_transition_thread) && !@data_transition_thread.nil?
 
       IORequest.logger.debug(prog_name) { 'Killing data transition thread' }
-      @data_trasition_thread.kill
-      @data_trasition_thread = nil
+      @data_transition_thread.kill
+      @data_transition_thread = nil
     end
 
     def close_io
