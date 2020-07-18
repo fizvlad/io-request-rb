@@ -31,6 +31,13 @@ module IORequest
     # Initialize new client.
     def initialize(authorizer: Authorizer::Empty)
       @authorizer = authorizer
+
+      @mutex_r = Mutex.new
+      @mutex_w = Mutex.new
+
+      @responses = {}
+      @responses_access_mutex = Mutex.new
+      @responses_access_cv = ConditionVariable.new
     end
 
     # Start new client connection.
@@ -41,40 +48,35 @@ module IORequest
       @io_r = read_write || read
       @io_w = read_write || write
 
-      IORequest.logger.debug 'Opening connection in separate thread'
-      in_thread(name: 'connection') { connection }
+      connection
     end
 
     # Close connection.
     def close
-      IORequest.logger.debug 'Closing connection'
-      begin
-        send_zero_size_request
-      rescue StandardError
-        IORequest.logger.debug 'Failed to send zero-sized message. Closing anyway'
-      end
-      close_io
+      close_internal
       join_threads
     end
 
     # @yieldparam [Hash]
     # @yieldreturn [Hash]
     def respond(&block)
-      IORequest.logger.debug 'Saved responder block'
+      IORequest.logger.debug(prog_name) { 'Saved responder block' }
       @responder = block
     end
 
     # If callback block is provided, request will be sent asynchroniously.
     # @param data [Hash]
-    def request(data = {}, &_callback)
+    def request(data = {}, &callback)
       message = Message.new(data, type: :request)
-      IORequest.logger.debug "Sending request #{message}"
 
       if block_given?
-        in_thread(name: "req#{message.id}") { yield send_request_and_wait_for_response(message) }
+        # Async execution of request
+        in_thread(callback, name: "req#{message.id}") do |cb|
+          cb.call(send_request_and_wait_for_response(message).data)
+        end
         nil
       else
-        send_request_and_wait_for_response(message)
+        send_request_and_wait_for_response(message).data
       end
     end
 
@@ -82,46 +84,119 @@ module IORequest
 
     private
 
-    def close_io
-      @io_r&.close
-      @io_w&.close
+    def close_internal
+      IORequest.logger.debug(prog_name) { 'Closing connection' }
+      begin
+        send_zero_size_request
+      rescue StandardError
+        IORequest.logger.debug(prog_name) { 'Failed to send zero-sized message. Closing anyway' }
+      end
+      stop_data_transition
+      close_io
     end
 
-    def connection
-      authorization
-      data_transition_loop
-    end
-
-    def authorization
-      IORequest.logger.debug 'Authorizing new client'
-      raise 'Authorization failed' unless @authorizer.authorize(@io_r, @io_w)
-
-      IORequest.logger.debug "New client authorized with data #{@authorizer.data}"
-    end
-
-    def data_transition_loop
-      loop do
-        data_transition_iteration
-      rescue StandardError => e
-        IORequest.logger.warn "Data transition iteration failed:\n#{e.full_message}"
-        break
+    def stop_data_transition
+      unless @data_trasition_thread.nil?
+        IORequest.logger.debug(prog_name) { 'Killing data transition thread' }
+        @data_trasition_thread.kill
+        @data_trasition_thread = nil
       end
     end
 
+    def close_io
+      IORequest.logger.debug(prog_name) { 'Closing IO' }
+      @mutex_r.synchronize { @io_r&.close }
+      @mutex_w.synchronize { @io_w&.close }
+    end
+
+    def connection
+      IORequest.logger.debug(prog_name) { 'Starting connection' }
+      authorization
+      @data_trasition_thread = in_thread(name: 'connection') { data_transition_loop }
+    end
+
+    def authorization
+      auth_successful = @mutex_r.synchronize do
+        @mutex_w.synchronize do
+          IORequest.logger.debug(prog_name) { 'Authorizing new client' }
+          @authorizer.authorize(@io_r, @io_w)
+        end
+      end
+      unless auth_successful
+        IORequest.logger.debug(prog_name) { 'Authorization failed' }
+        raise 'Authorization failed'
+      end
+
+      IORequest.logger.debug(prog_name) { "New client authorized with data #{@authorizer.data}" }
+    end
+
+    def data_transition_loop
+      IORequest.logger.debug(prog_name) { 'Starting data transition loop' }
+      loop do
+        data_transition_iteration
+      rescue StandardError => e
+        IORequest.logger.debug(prog_name) { "Data transition iteration failed: #{e}" }
+        break
+      end
+      close_internal
+    end
+
     def data_transition_iteration
-      # TODO: read message size
-      # TODO: read JSON
-      # TODO: if it is request pass data to responder, get reply and send it
-      # TODO: if it is response, get data and pass it to awaiting requester
+      message = @mutex_r.synchronize { Message.read_from(@io_r) }
+      IORequest.logger.debug(prog_name) { "Received message: #{message}" }
+      if message.request?
+        handle_request(message)
+      else
+        handle_response(message)
+      end
+    end
+
+    def handle_request(message)
+      data = @responder&.call(message.data) || {}
+      response = Message.new(data, type: :response, to: message.id)
+      send_response(response)
+    end
+
+    def handle_response(message)
+      @responses_access_mutex.synchronize do
+        @responses[message.to.to_s] = message
+        @responses_access_cv.broadcast
+      end
+    end
+
+    def send_response(response)
+      @mutex_w.synchronize do
+        IORequest.logger.debug(prog_name) { "Sending response: #{response}" }
+        response.write_to(@io_w)
+      end
     end
 
     def send_zero_size_request
-      # TODO: send zero
-      # TODO: close connection
+      @mutex_w.synchronize do
+        IORequest.logger.debug(prog_name) { 'Sending zero size message' }
+        @io_w.write([0].pack('S'))
+      end
     end
 
     def send_request_and_wait_for_response(request)
-      request.write_to(@io_w)
+      @mutex_w.synchronize do
+        IORequest.logger.debug(prog_name) { "Sending message: #{request}" }
+        request.write_to(@io_w)
+      end
+      wait_for_response(request)
+    end
+
+    def wait_for_response(request)
+      IORequest.logger.debug(prog_name) { "Waiting for response for #{request}" }
+      @responses_access_mutex.synchronize do
+        response = nil
+        until response
+          @responses_access_cv.wait(@responses_access_mutex)
+          response = @responses[request.id.to_s]
+        end
+        IORequest.logger.debug(prog_name) { "Found response: #{response}" }
+        response
+      end
     end
   end
 end
