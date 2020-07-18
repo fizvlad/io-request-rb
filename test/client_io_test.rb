@@ -12,7 +12,7 @@ class ClientIOTest < Minitest::Test
 
     @thread1 = Thread.new { @client1.open read: @r1, write: @w2 }
     @thread2 = Thread.new { @client2.open read: @r2, write: @w1 }
-    sleep 3 # Wait some time for clients to be ready
+    sleep 1 until @client1.open? && @client2.open?
   end
 
   def teardown

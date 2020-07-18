@@ -29,7 +29,8 @@ module IORequest
     include Utility::MultiThread
 
     # Initialize new client.
-    def initialize(authorizer: Authorizer::Empty)
+    def initialize(authorizer: Authorizer.empty)
+      @open = false
       @authorizer = authorizer
 
       @mutex_r = Mutex.new
@@ -48,13 +49,22 @@ module IORequest
       @io_r = read_write || read
       @io_w = read_write || write
 
-      connection
+      IORequest.logger.debug(prog_name) { 'Starting connection' }
+
+      authorization
+      @open = true
+      @data_trasition_thread = in_thread(name: 'connection') { data_transition_loop }
+    end
+
+    def open?
+      @open
     end
 
     # Close connection.
     def close
       close_internal
       join_threads
+      @open = false
     end
 
     # @yieldparam [Hash]
@@ -107,12 +117,6 @@ module IORequest
       IORequest.logger.debug(prog_name) { 'Closing IO' }
       @mutex_r.synchronize { @io_r&.close }
       @mutex_w.synchronize { @io_w&.close }
-    end
-
-    def connection
-      IORequest.logger.debug(prog_name) { 'Starting connection' }
-      authorization
-      @data_trasition_thread = in_thread(name: 'connection') { data_transition_loop }
     end
 
     def authorization
