@@ -10,9 +10,10 @@ module IORequest
     # Create new message.
     # @param data [Hash]
     # @param type [Symbol] one of {TYPES} member.
-    # @param id [Utility::ExtendedID, String, nil] only should be filled if message is received from outside.
-    # @param to [Utility::ExtendedID, String, nil] if message is response, it should include integer
-    #   of original request.
+    # @param id [Utility::ExtendedID, String, nil] only should be filled if
+    #   message is received from outside.
+    # @param to [Utility::ExtendedID, String, nil] if message is response, it
+    #   should include integer of original request.
     def initialize(data, type: :request, id: nil, to: nil)
       @data = data
       @type = type
