@@ -47,4 +47,13 @@ class ClientIOTest < Minitest::Test
 
     sleep total + 1
   end
+
+  def test_on_close
+    on_close_fired = false
+    @client2.on_close do
+      on_close_fired = true
+    end
+    @client2.close
+    assert on_close_fired
+  end
 end

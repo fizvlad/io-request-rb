@@ -110,7 +110,7 @@ module IORequest
       stop_data_transition
       close_io
       @open = false
-      @on_close&.call
+      @on_close&.call if defined?(@on_close)
     end
 
     def stop_data_transition
@@ -164,7 +164,8 @@ module IORequest
     end
 
     def handle_request(message)
-      data = @on_request&.call(message.data) || {}
+      data = {}
+      data = @on_request&.call(message.data) if defined?(@on_request)
       response = Message.new(data, type: :response, to: message.id)
       send_response(response)
     end
