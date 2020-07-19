@@ -200,6 +200,8 @@ module IORequest
         IORequest.logger.debug(prog_name) { 'Sending zero size message' }
         @io_w.write([0].pack('S'))
       end
+    rescue StandardError => e
+      IORequest.logger.debug(prog_name) { "Failed to send zero-sized message(#{e})" }
     end
 
     def send_request_and_wait_for_response(request)
