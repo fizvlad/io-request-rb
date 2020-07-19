@@ -81,8 +81,8 @@ module IORequest
     # @param io_r [:read]
     # @return [Message]
     def self.read_from(io_r)
-      size = io_r.read(2).unpack1('S')
-      raise '0 size received' if size.zero?
+      size = io_r.read(2)&.unpack1('S') || 0
+      raise ZeroSizeMessageError if size.zero?
 
       json_string = io_r.read(size).unpack1("a#{size}")
       msg = JSON.parse(json_string, symbolize_names: true)
