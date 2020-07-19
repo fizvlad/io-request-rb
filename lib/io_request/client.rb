@@ -69,9 +69,11 @@ module IORequest
 
     # @yieldparam [Hash]
     # @yieldreturn [Hash]
-    def respond(&block)
-      IORequest.logger.debug(prog_name) { 'Saved responder block' }
-      @responder = block
+    def on_request(&block)
+      IORequest.logger.debug(prog_name) { 'Saved on_request block' }
+      @on_request = block
+    end
+    alias respond on_request
     end
 
     # If callback block is provided, request will be sent asynchroniously.
@@ -156,7 +158,7 @@ module IORequest
     end
 
     def handle_request(message)
-      data = @responder&.call(message.data) || {}
+      data = @on_request&.call(message.data) || {}
       response = Message.new(data, type: :response, to: message.id)
       send_response(response)
     end
