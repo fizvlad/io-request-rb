@@ -102,23 +102,11 @@ module IORequest
 
     def close_internal
       IORequest.logger.debug(prog_name) { 'Closing connection' }
-      begin
-        send_zero_size_request
-      rescue StandardError
-        IORequest.logger.debug(prog_name) { 'Failed to send zero-sized message. Closing anyway' }
-      end
-      stop_data_transition
+      send_zero_size_request
       close_io
+      @data_transition_thread = nil
       @open = false
       @on_close&.call if defined?(@on_close)
-    end
-
-    def stop_data_transition
-      return unless defined?(@data_transition_thread) && !@data_transition_thread.nil?
-
-      IORequest.logger.debug(prog_name) { 'Killing data transition thread' }
-      @data_transition_thread.kill
-      @data_transition_thread = nil
     end
 
     def close_io
