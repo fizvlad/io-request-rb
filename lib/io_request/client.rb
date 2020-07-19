@@ -130,10 +130,7 @@ module IORequest
           @authorizer.authorize(@io_r, @io_w)
         end
       end
-      unless auth_successful
-        IORequest.logger.debug(prog_name) { 'Authorization failed' }
-        raise 'Authorization failed'
-      end
+      raise AuthorizationFailureError unless auth_successful
 
       IORequest.logger.debug(prog_name) { "New client authorized with data #{@authorizer.data}" }
     end

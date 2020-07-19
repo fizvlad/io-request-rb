@@ -4,6 +4,9 @@
 module IORequest
   # Client received message of zero size.
   class ZeroSizeMessageError < RuntimeError; end
+
+  # Authorization failed.
+  class AuthorizationFailureError < RuntimeError; end
 end
 
 require_relative 'io_request/version'

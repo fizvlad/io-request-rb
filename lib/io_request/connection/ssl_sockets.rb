@@ -84,12 +84,12 @@ module IORequest
           client.on_close do
             @clients.select!(&:open?)
           end
-        rescue StandardError
-          IORequest.debug "Failed to open client: #{e}"
+        rescue StandardError => e
+          IORequest.logger.debug "Failed to open client: #{e}"
           ssl_socket.close
         end
       rescue StandardError => e
-        IORequest.warn "Unknown error while handling sockets: #{e}"
+        IORequest.logger.warn "Unknown error while handling sockets: #{e}"
       end
     end
 
@@ -108,7 +108,13 @@ module IORequest
         @authorizer = authorizer
         @requests_handler = requests_handler
 
+        @client = nil
+
         initialize_ssl_context(certificate, key)
+      end
+
+      def connected?
+        !@client.nil?
       end
 
       # Connect to server.
