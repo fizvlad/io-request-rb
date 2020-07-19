@@ -79,7 +79,7 @@ module IORequest
         client = IORequest::Client.new authorizer: @authorizer
         begin
           client.open read_write: ssl_socket
-          client.respond(&@requests_handler)
+          client.respond { |data| @requests_handler.call(data, client) }
           @clients << client
         rescue StandardError
           IORequest.debug "Failed to open client: #{e}"
