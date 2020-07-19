@@ -8,7 +8,7 @@ class AuthorizerBySecretKeyTest < Minitest::Test
     @r2, @w2 = IO.pipe
 
     @client1 = IORequest::Client.new(authorizer: IORequest::Authorizer.by_secret_key('secret_key'))
-    @client1.respond do |data|
+    @client1.on_request do |data|
       data
     end
     Thread.new do

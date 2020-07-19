@@ -1,7 +1,10 @@
 # frozen_string_literal: true
 
 # Main module.
-module IORequest; end
+module IORequest
+  # Client received message of zero size.
+  class ZeroSizeMessageError < RuntimeError; end
+end
 
 require_relative 'io_request/version'
 require_relative 'io_request/logging'

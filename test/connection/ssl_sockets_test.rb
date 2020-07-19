@@ -8,8 +8,9 @@ class ConnectionSslSocketsTest < Minitest::Test
   def setup
     @cert = File.read File.expand_path('../files/cacert.pem', __dir__)
     @key = File.read File.expand_path('../files/key.pem', __dir__)
+    @port = 8000 + rand(1000)
 
-    @server = IORequest::SSLSockets::Server.new(certificate: @cert, key: @key) do |data, client|
+    @server = IORequest::SSLSockets::Server.new(port: @port, certificate: @cert, key: @key) do |data, client|
       assert client.is_a? IORequest::Client
       data # Echo
     end
@@ -18,7 +19,7 @@ class ConnectionSslSocketsTest < Minitest::Test
     @client = IORequest::SSLSockets::Client.new(certificate: @cert, key: @key) do |data|
       data # Echo
     end
-    @client.connect
+    @client.connect('localhost', @port)
   end
 
   def teardown
@@ -33,8 +34,21 @@ class ConnectionSslSocketsTest < Minitest::Test
   end
 
   def test_server_requests
+    assert_equal 1, @server.clients.size
+    assert @server.clients.first.open?
+
     data = @server.clients.first.request({ num: 2, string: 'oi' })
     assert_equal(2, data[:num])
     assert_equal('oi', data[:string])
+  end
+
+  def test_clients_count
+    @client2 = IORequest::SSLSockets::Client.new(certificate: @cert, key: @key) do |data|
+      data # Echo
+    end
+    @client2.connect('localhost', @port)
+    @client2.disconnect
+    sleep 1 # NOTE: Give server some time to understand connection was closed
+    assert_equal 1, @server.clients.size
   end
 end

@@ -63,15 +63,21 @@ module IORequest
     # Close connection.
     def close
       close_internal
+
       join_threads
-      @open = false
     end
 
     # @yieldparam [Hash]
     # @yieldreturn [Hash]
-    def respond(&block)
-      IORequest.logger.debug(prog_name) { 'Saved responder block' }
-      @responder = block
+    def on_request(&block)
+      IORequest.logger.debug(prog_name) { 'Saved on_request block' }
+      @on_request = block
+    end
+    alias respond on_request
+
+    def on_close(&block)
+      IORequest.logger.debug(prog_name) { 'Saved on_close block' }
+      @on_close = block
     end
 
     # If callback block is provided, request will be sent asynchroniously.
@@ -96,27 +102,25 @@ module IORequest
 
     def close_internal
       IORequest.logger.debug(prog_name) { 'Closing connection' }
-      begin
-        send_zero_size_request
-      rescue StandardError
-        IORequest.logger.debug(prog_name) { 'Failed to send zero-sized message. Closing anyway' }
-      end
-      stop_data_transition
+      send_zero_size_request
       close_io
-    end
-
-    def stop_data_transition
-      return unless defined?(@data_transition_thread) && !@data_transition_thread.nil?
-
-      IORequest.logger.debug(prog_name) { 'Killing data transition thread' }
-      @data_transition_thread.kill
       @data_transition_thread = nil
+      @open = false
+      @on_close&.call if defined?(@on_close)
     end
 
     def close_io
-      IORequest.logger.debug(prog_name) { 'Closing IO' }
-      @mutex_r.synchronize { @io_r&.close }
-      @mutex_w.synchronize { @io_w&.close }
+      begin
+        @io_r&.close
+      rescue StandardError => e
+        IORequest.logger.debug "Failed to close read IO: #{e}"
+      end
+      begin
+        @io_w&.close
+      rescue StandardError => e
+        IORequest.logger.debug "Failed to close write IO: #{e}"
+      end
+      IORequest.logger.debug(prog_name) { 'Closed IO streams' }
     end
 
     def authorization
@@ -138,8 +142,11 @@ module IORequest
       IORequest.logger.debug(prog_name) { 'Starting data transition loop' }
       loop do
         data_transition_iteration
+      rescue ZeroSizeMessageError
+        IORequest.logger.debug(prog_name) { 'Connection was closed from the other side' }
+        break
       rescue StandardError => e
-        IORequest.logger.debug(prog_name) { "Data transition iteration failed: #{e}" }
+        IORequest.logger.debug(prog_name) { "Data transition unknown error: #{e}" }
         break
       end
       close_internal
@@ -156,7 +163,8 @@ module IORequest
     end
 
     def handle_request(message)
-      data = @responder&.call(message.data) || {}
+      data = {}
+      data = @on_request&.call(message.data) if defined?(@on_request)
       response = Message.new(data, type: :response, to: message.id)
       send_response(response)
     end
@@ -180,6 +188,8 @@ module IORequest
         IORequest.logger.debug(prog_name) { 'Sending zero size message' }
         @io_w.write([0].pack('S'))
       end
+    rescue StandardError => e
+      IORequest.logger.debug(prog_name) { "Failed to send zero-sized message(#{e})" }
     end
 
     def send_request_and_wait_for_response(request)
