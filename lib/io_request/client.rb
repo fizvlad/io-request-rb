@@ -122,9 +122,17 @@ module IORequest
     end
 
     def close_io
-      IORequest.logger.debug(prog_name) { 'Closing IO' }
-      @mutex_r.synchronize { @io_r&.close }
-      @mutex_w.synchronize { @io_w&.close }
+      begin
+        @io_r&.close
+      rescue StandardError => e
+        IORequest.logger.debug "Failed to close read IO: #{e}"
+      end
+      begin
+        @io_w&.close
+      rescue StandardError => e
+        IORequest.logger.debug "Failed to close write IO: #{e}"
+      end
+      IORequest.logger.debug(prog_name) { 'Closed IO streams' }
     end
 
     def authorization
