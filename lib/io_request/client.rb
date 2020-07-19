@@ -63,8 +63,8 @@ module IORequest
     # Close connection.
     def close
       close_internal
+
       join_threads
-      @open = false
     end
 
     # @yieldparam [Hash]
@@ -74,6 +74,10 @@ module IORequest
       @on_request = block
     end
     alias respond on_request
+
+    def on_close(&block)
+      IORequest.logger.debug(prog_name) { 'Saved on_close block' }
+      @on_close = block
     end
 
     # If callback block is provided, request will be sent asynchroniously.
@@ -105,6 +109,8 @@ module IORequest
       end
       stop_data_transition
       close_io
+      @open = false
+      @on_close&.call
     end
 
     def stop_data_transition
