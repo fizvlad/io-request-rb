@@ -24,7 +24,7 @@ class ClientIOTest < Minitest::Test
   end
 
   def test_simple_request
-    @client2.respond do |_data|
+    @client2.on_request do |_data|
       { num: 1, string: 'str' }
     end
 
@@ -36,7 +36,7 @@ class ClientIOTest < Minitest::Test
   def test_intersecting_requests
     total = 10
 
-    @client2.respond do |data|
+    @client2.on_request do |data|
       sleep data[:sleep_time]
       { num: data[:num] }
     end
