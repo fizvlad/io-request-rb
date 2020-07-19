@@ -146,8 +146,11 @@ module IORequest
       IORequest.logger.debug(prog_name) { 'Starting data transition loop' }
       loop do
         data_transition_iteration
+      rescue ZeroSizeMessageError
+        IORequest.logger.debug(prog_name) { 'Connection was closed from the other side' }
+        break
       rescue StandardError => e
-        IORequest.logger.debug(prog_name) { "Data transition iteration failed: #{e}" }
+        IORequest.logger.debug(prog_name) { "Data transition unknown error: #{e}" }
         break
       end
       close_internal
