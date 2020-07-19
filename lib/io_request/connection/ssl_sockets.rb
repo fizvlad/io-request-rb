@@ -123,7 +123,6 @@ module IORequest
           @client.open read_write: ssl_socket
           @client.on_request(&@requests_handler)
         rescue StandardError
-          IORequest.debug "Failed to open client: #{e}"
           ssl_socket.close
           @client = nil
         end
