@@ -81,6 +81,9 @@ module IORequest
           client.open read_write: ssl_socket
           client.on_request { |data| @requests_handler.call(data, client) }
           @clients << client
+          client.on_close do
+            @clients.select!(&:open?)
+          end
         rescue StandardError
           IORequest.debug "Failed to open client: #{e}"
           ssl_socket.close
