@@ -51,4 +51,11 @@ class ConnectionSslSocketsTest < Minitest::Test
     sleep 1 # NOTE: Give server some time to understand connection was closed
     assert_equal 1, @server.clients.size
   end
+
+  def test_clients_data
+    assert @server.data(@server.clients.first).is_a? Hash
+
+    @server.data(@server.clients.first)[:num] = 123
+    assert_equal 123, @server.data(@server.clients.first)[:num]
+  end
 end
