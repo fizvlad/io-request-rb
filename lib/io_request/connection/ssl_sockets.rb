@@ -32,11 +32,20 @@ module IORequest
       end
 
       # @return [Array<IORequest::Client>]
-      attr_reader :clients
+      def clients
+        @clients_data.keys
+      end
+
+      # @param client [IORequest::Client]
+      # @return [Hash, nil] you are free to store anything you want in hash.
+      #   Only field you will find in it is `auth` with authenticator data.
+      def data(client)
+        @clients_data[client]
+      end
 
       # Start server.
       def start
-        @clients = []
+        @clients_data = {}
 
         @server = TCPServer.new(@port)
 
@@ -45,8 +54,8 @@ module IORequest
 
       # Fully stop server.
       def stop
-        @clients.each(&:close)
-        @clients = []
+        clients.each(&:close)
+        @clients_data.clear
 
         @server.close
         @server = nil
@@ -68,7 +77,7 @@ module IORequest
         while (socket = @server.accept)
           handle_socket(socket)
         end
-      rescue
+      rescue StandardError
         stop
       end
 
@@ -76,20 +85,21 @@ module IORequest
         ssl_socket = OpenSSL::SSL::SSLSocket.new(socket, @ctx)
         ssl_socket.accept
 
-        client = IORequest::Client.new authorizer: @authorizer
-        begin
-          client.open read_write: ssl_socket
-          client.on_request { |data| @requests_handler.call(data, client) }
-          @clients << client
-          client.on_close do
-            @clients.select!(&:open?)
-          end
-        rescue StandardError => e
-          IORequest.logger.debug "Failed to open client: #{e}"
-          ssl_socket.close
-        end
+        handle_client(ssl_socket, IORequest::Client.new(authorizer: @authorizer))
       rescue StandardError => e
         IORequest.logger.warn "Unknown error while handling sockets: #{e}"
+      end
+
+      def handle_client(ssl_socket, client)
+        auth_data = client.open read_write: ssl_socket
+        client.on_request { |data| @requests_handler.call(data, client) }
+        @clients_data[client] = { auth: auth_data }
+        client.on_close do
+          @clients_data.select! { |c, _d| c.open? }
+        end
+      rescue StandardError => e
+        IORequest.logger.debug "Failed to open client: #{e}"
+        ssl_socket.close
       end
     end
 

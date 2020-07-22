@@ -45,15 +45,17 @@ module IORequest
     # @param r [IO] object to read from.
     # @param w [IO] object to write to.
     # @param rw [IO] read-write object (replaces `r` and `w` arguments).
+    # @return [Object] data from {Authorizer}
     def open(read: nil, write: nil, read_write: nil)
       @io_r = read_write || read
       @io_w = read_write || write
 
       IORequest.logger.debug(prog_name) { 'Starting connection' }
 
-      authorization
+      auth_data = authorization
       @open = true
       @data_transition_thread = in_thread(name: 'connection') { data_transition_loop }
+      auth_data
     end
 
     def open?
@@ -124,15 +126,19 @@ module IORequest
     end
 
     def authorization
-      auth_successful = @mutex_r.synchronize do
+      auth_successful = false
+      data = nil
+      @mutex_r.synchronize do
         @mutex_w.synchronize do
           IORequest.logger.debug(prog_name) { 'Authorizing new client' }
-          @authorizer.authorize(@io_r, @io_w)
+          auth_successful = @authorizer.authorize(@io_r, @io_w)
+          data = @authorizer.data
         end
       end
       raise AuthorizationFailureError unless auth_successful
 
-      IORequest.logger.debug(prog_name) { "New client authorized with data #{@authorizer.data}" }
+      IORequest.logger.debug(prog_name) { "New client authorized with data #{data}" }
+      data
     end
 
     def data_transition_loop

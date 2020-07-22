@@ -24,8 +24,9 @@ class AuthorizerBySecretKeyTest < Minitest::Test
 
   def test_correct_key
     @client2 = IORequest::Client.new(authorizer: IORequest::Authorizer.by_secret_key('secret_key'))
-    @client2.open read: @r2, write: @w1
+    auth_data = @client2.open read: @r2, write: @w1
     sleep 1 until @client2.open?
+    assert_equal 'secret_key', auth_data
 
     re = @client2.request({ a: 1 })
     assert_equal 1, re[:a]
