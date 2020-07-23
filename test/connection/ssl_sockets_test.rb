@@ -58,4 +58,19 @@ class ConnectionSslSocketsTest < Minitest::Test
     @server.data(@server.clients.first)[:num] = 123
     assert_equal 123, @server.data(@server.clients.first)[:num]
   end
+
+  def test_client_open
+    @client2 = IORequest::SSLSockets::Client.new(certificate: @cert, key: @key) do |data|
+      data # Echo
+    end
+    @client2.connect('localhost', @port)
+    @client2.disconnect
+    sleep 1
+    refute @client2.connected?
+
+    @server.clients.first.close
+    sleep 1
+    assert @server.clients.empty?
+    refute @client.connected?
+  end
 end
