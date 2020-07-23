@@ -141,6 +141,9 @@ module IORequest
         begin
           @client.open read_write: ssl_socket
           @client.on_request(&@requests_handler)
+          @client.on_close do
+            @client = nil
+          end
         rescue StandardError
           ssl_socket.close
           @client = nil
