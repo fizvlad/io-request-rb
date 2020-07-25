@@ -56,4 +56,15 @@ class ClientIOTest < Minitest::Test
     @client2.close
     assert on_close_fired
   end
+
+  def test_request_timeout
+    @client2.on_request do |data|
+      sleep data[:sleep_time]
+      {}
+    end
+
+    assert_raises(IORequest::RequestTimeoutError) do
+      @client1.request({ sleep_time: 6 }, timeout: 3)
+    end
+  end
 end
