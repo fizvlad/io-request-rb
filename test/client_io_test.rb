@@ -28,7 +28,7 @@ class ClientIOTest < Minitest::Test
       { num: 1, string: 'str' }
     end
 
-    data = @client1.request
+    data = @client1.request({})
     assert_equal(1, data[:num])
     assert_equal('str', data[:string])
   end
