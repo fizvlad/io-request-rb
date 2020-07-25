@@ -220,7 +220,7 @@ module IORequest
             # NOTE: Only accessing responses hash if thread owns access mutex
             response = @responses.delete(request.id.to_s)
           end
-          raise RequestTimeoutError if timeout && (Time.now - waiting_start_time < timeout)
+          raise RequestTimeoutError if timeout && (Time.now - waiting_start_time >= timeout)
         end
         IORequest.logger.debug(prog_name) { "Found response: #{response}" }
         response

@@ -63,8 +63,12 @@ class ClientIOTest < Minitest::Test
       {}
     end
 
+    start_time = Time.now
     assert_raises(IORequest::RequestTimeoutError) do
       @client1.request({ sleep_time: 6 }, timeout: 3)
     end
+    end_time = Time.now
+
+    assert_in_delta 3, end_time - start_time, 1.0
   end
 end
