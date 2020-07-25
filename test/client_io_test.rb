@@ -28,7 +28,7 @@ class ClientIOTest < Minitest::Test
       { num: 1, string: 'str' }
     end
 
-    data = @client1.request
+    data = @client1.request({})
     assert_equal(1, data[:num])
     assert_equal('str', data[:string])
   end
@@ -55,5 +55,16 @@ class ClientIOTest < Minitest::Test
     end
     @client2.close
     assert on_close_fired
+  end
+
+  def test_request_timeout
+    @client2.on_request do |data|
+      sleep data[:sleep_time]
+      {}
+    end
+
+    assert_raises(IORequest::RequestTimeoutError) do
+      @client1.request({ sleep_time: 6 }, timeout: 3)
+    end
   end
 end

@@ -7,6 +7,9 @@ module IORequest
 
   # Authorization failed.
   class AuthorizationFailureError < RuntimeError; end
+
+  # Request timed out.
+  class RequestTimeoutError < RuntimeError; end
 end
 
 require_relative 'io_request/version'

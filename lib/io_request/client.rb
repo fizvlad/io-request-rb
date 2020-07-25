@@ -77,6 +77,7 @@ module IORequest
     end
     alias respond on_request
 
+    # Code to execute after connection is closed.
     def on_close(&block)
       IORequest.logger.debug(prog_name) { 'Saved on_close block' }
       @on_close = block
@@ -84,17 +85,18 @@ module IORequest
 
     # If callback block is provided, request will be sent asynchroniously.
     # @param data [Hash]
-    def request(data = {}, &callback)
+    # @param timeout [Integer] timeout in seconds.
+    def request(data, timeout: nil, &callback)
       message = Message.new(data, type: :request)
 
       if block_given?
         # Async execution of request
         in_thread(callback, name: 'requesting') do |cb|
-          cb.call(send_request_and_wait_for_response(message).data)
+          cb.call(send_request_and_wait_for_response(message, timeout).data)
         end
         nil
       else
-        send_request_and_wait_for_response(message).data
+        send_request_and_wait_for_response(message, timeout).data
       end
     end
 
@@ -182,7 +184,11 @@ module IORequest
     def send_response(response)
       @mutex_w.synchronize do
         IORequest.logger.debug(prog_name) { "Sending response: #{response}" }
-        response.write_to(@io_w)
+        begin
+          response.write_to(@io_w)
+        rescue IOError => e
+          IORequest.logger.debug(prog_name) { "Failed to write response message: #{e}" }
+        end
       end
     end
 
@@ -195,21 +201,26 @@ module IORequest
       IORequest.logger.debug(prog_name) { "Failed to send zero-sized message(#{e})" }
     end
 
-    def send_request_and_wait_for_response(request)
+    def send_request_and_wait_for_response(request, timeout)
       @mutex_w.synchronize do
         IORequest.logger.debug(prog_name) { "Sending message: #{request}" }
         request.write_to(@io_w)
       end
-      wait_for_response(request)
+      wait_for_response(request, timeout)
     end
 
-    def wait_for_response(request)
+    def wait_for_response(request, timeout)
       IORequest.logger.debug(prog_name) { "Waiting for response for #{request}" }
+      waiting_start_time = Time.now
       @responses_access_mutex.synchronize do
         response = nil
         until response
-          @responses_access_cv.wait(@responses_access_mutex)
-          response = @responses[request.id.to_s]
+          @responses_access_cv.wait(@responses_access_mutex, 1)
+          if @responses_access_mutex.owned?
+            # NOTE: Only accessing responses hash if thread owns access mutex
+            response = @responses.delete(request.id.to_s)
+          end
+          raise RequestTimeoutError if timeout && (Time.now - waiting_start_time < timeout)
         end
         IORequest.logger.debug(prog_name) { "Found response: #{response}" }
         response
